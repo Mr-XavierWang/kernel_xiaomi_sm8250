@@ -1,56 +1,42 @@
-name: Build Psyche Kernel
-on:
-  push:
-    branches: [ main ]
-  workflow_dispatch:
+name: Build Kernel
+on: workflow_dispatch
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: 拉取完整内核源码
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: 安装编译依赖
-        run: |
-          sudo apt update -y
-          sudo apt install -y gcc-aarch64-linux-gnu libssl-dev bc zip cpio git curl
-
-      - name: 注入 KernelSU 驱动（国内镜像加速）
-        run: |
-          curl -LSs "https://mirror.ghproxy.com/https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash
-
-      - name: 复制 psyche.config 并补全骁龙870 CPU掩码
+      # 拉取源码
+      - uses: actions/checkout@v4
+      # 安装编译工具链
+      - name: Install Dependencies
+        run: sudo apt update && sudo apt install -y gcc-aarch64-linux-gnu bc zip git curl libssl-dev
+      # 注入KernelSU
+      - name: Inject KernelSU
+        run: curl -LSs https://mirror.ghproxy.com/https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh | bash
+      # 加载机型配置，自动应答所有交互弹窗（解决循环弹窗/读取报错核心）
+      - name: Load psyche config
         run: |
           cp arch/arm64/configs/vendor/xiaomi/psyche.config .config
-          make ARCH=arm64 olddefconfig
-          echo "CONFIG_LITTLE_CPU_MASK=0x0000000f" >> .config
-          echo "CONFIG_BIG_CPU_MASK=0x00000ff0" >> .config
-          make ARCH=arm64 olddefconfig
-
-      - name: 开启 KSU & 完整符号表（解决KMI报错核心）
+          yes "" | make ARCH=arm64 olddefconfig
+      # 开启KSU与完整符号表（仅修复你最初SuKisu报错的必要参数）
+      - name: Enable KSU & symbols
         run: |
           echo "CONFIG_KALLSYMS=y" >> .config
           echo "CONFIG_KALLSYMS_ALL=y" >> .config
-          echo "CONFIG_KPROBES=y" >> .config
-          echo "CONFIG_KPROBE_EVENTS=y" >> .config
           echo "CONFIG_KSU=y" >> .config
-          make ARCH=arm64 olddefconfig
-
-      - name: 编译内核镜像（限制4线程防内存溢出）
+          yes "" | make ARCH=arm64 olddefconfig
+      # 标准编译，限制线程避免内存爆
+      - name: Compile kernel
         run: make -j4 ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu-
-
-      - name: 下载 AnyKernel3 打包模板
+      # 打包AnyKernel3
+      - name: Pack AnyKernel3
         run: |
-          git clone https://mirror.ghproxy.com/https://github.com/osm0sis/AnyKernel3.git AK3
-          cp out/arch/arm64/boot/Image.gz-dtb AK3/Image.gz-dtb
-          cd AK3
-          zip -r psyche-KSU-AnyKernel3.zip *
-
-      - name: 上传刷机包成品
+          git clone https://mirror.ghproxy.com/https://github.com/osm0sis/AnyKernel3 AK3
+          cp out/arch/arm64/boot/Image.gz-dtb AK3/
+          cd AK3 && zip -r kernel.zip *
+      # 输出刷机包
+      - name: Upload zip
         uses: actions/upload-artifact@v4
         with:
-          name: psyche-KSU内核刷机包
-          path: AK3/psyche-KSU-AnyKernel3.zip
+          name: psyche-kernel
+          path: AK3/kernel.zip
