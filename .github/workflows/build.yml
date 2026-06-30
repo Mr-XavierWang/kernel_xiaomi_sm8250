@@ -1,0 +1,51 @@
+name: Build Psyche Kernel
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch: # 支持手动点击触发编译
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 拉取内核源码
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: 安装编译依赖
+        run: |
+          sudo apt update -y
+          sudo apt install -y gcc-aarch64-linux-gnu libssl-dev bc zip cpio git curl
+
+      - name: 注入 KernelSU 驱动
+        run: |
+          curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash
+
+      - name: 加载 psyche 机型配置
+        run: make ARCH=arm64 vendor/psyche.config
+
+      - name: 开启 KSU & 完整符号表（解决KMI报错核心）
+        run: |
+          echo "CONFIG_KALLSYMS=y" >> .config
+          echo "CONFIG_KALLSYMS_ALL=y" >> .config
+          echo "CONFIG_KPROBES=y" >> .config
+          echo "CONFIG_KPROBE_EVENTS=y" >> .config
+          echo "CONFIG_KSU=y" >> .config
+          make ARCH=arm64 olddefconfig
+
+      - name: 编译内核镜像
+        run: make -j$(nproc) ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu-
+
+      - name: 下载 AnyKernel3 打包模板
+        run: |
+          git clone https://github.com/osm0sis/AnyKernel3.git AK3
+          cp out/arch/arm64/boot/Image.gz-dtb AK3/Image.gz-dtb
+          cd AK3
+          zip -r psyche-KSU-AnyKernel3.zip *
+
+      - name: 上传刷机包成品
+        uses: actions/upload-artifact@v4
+        with:
+          name: psyche-KSU内核刷机包
+          path: AK3/psyche-KSU-AnyKernel3.zip
