@@ -24,7 +24,7 @@ jobs:
 
       - name: 复制 psyche.config 为内核编译配置
         run: |
-          cp arch/arm64/configs/vendor/psyche.config .config
+          cp arch/arm64/configs/vendor/xiaomi/psyche.config .config
           make ARCH=arm64 olddefconfig
 
       - name: 开启 KSU & 完整符号表（解决KMI报错核心）
