@@ -11,12 +11,16 @@ jobs:
       - name: 拉取内核源码
         uses: actions/checkout@v4
         with:
-          fetch-depth: 1
+          fetch-depth: 0
 
       - name: 安装编译依赖
         run: |
           sudo apt update -y
           sudo apt install -y gcc-aarch64-linux-gnu libssl-dev bc zip cpio git curl
+          sudo fallocate -l 16G /swapfile
+          sudo chmod 600 /swapfile
+          sudo mkswap /swapfile
+          sudo swapon /swapfile
 
       - name: 注入 KernelSU 驱动
         run: |
