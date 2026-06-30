@@ -22,8 +22,10 @@ jobs:
         run: |
           curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash
 
-      - name: 加载 psyche 机型配置
-        run: make ARCH=arm64 vendor/psyche.config
+      - name: 复制 psyche.config 为内核编译配置
+        run: |
+          cp arch/arm64/configs/vendor/psyche.config .config
+          make ARCH=arm64 olddefconfig
 
       - name: 开启 KSU & 完整符号表（解决KMI报错核心）
         run: |
