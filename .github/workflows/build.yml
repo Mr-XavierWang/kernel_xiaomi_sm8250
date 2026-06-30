@@ -2,18 +2,18 @@ name: Build Psyche Kernel
 on:
   push:
     branches: [ main ]
-  workflow_dispatch: # 支持手动点击触发编译
+  workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: 拉取内核源码
+      - name: 拉取完整内核源码
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: 安装编译依赖
+      - name: 安装编译依赖 + 扩容交换内存
         run: |
           sudo apt update -y
           sudo apt install -y gcc-aarch64-linux-gnu libssl-dev bc zip cpio git curl
@@ -22,13 +22,16 @@ jobs:
           sudo mkswap /swapfile
           sudo swapon /swapfile
 
-      - name: 注入 KernelSU 驱动
+      - name: 注入 KernelSU 驱动（国内镜像加速）
         run: |
-          curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash
+          curl -LSs "https://mirror.ghproxy.com/https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash
 
-      - name: 复制 psyche.config 为内核编译配置
+      - name: 复制 psyche.config 并补全骁龙870 CPU掩码
         run: |
           cp arch/arm64/configs/vendor/xiaomi/psyche.config .config
+          make ARCH=arm64 olddefconfig
+          echo "CONFIG_LITTLE_CPU_MASK=0x0000000f" >> .config
+          echo "CONFIG_BIG_CPU_MASK=0x00000ff0" >> .config
           make ARCH=arm64 olddefconfig
 
       - name: 开启 KSU & 完整符号表（解决KMI报错核心）
@@ -45,7 +48,7 @@ jobs:
 
       - name: 下载 AnyKernel3 打包模板
         run: |
-          git clone https://github.com/osm0sis/AnyKernel3.git AK3
+          git clone https://mirror.ghproxy.com/https://github.com/osm0sis/AnyKernel3.git AK3
           cp out/arch/arm64/boot/Image.gz-dtb AK3/Image.gz-dtb
           cd AK3
           zip -r psyche-KSU-AnyKernel3.zip *
